@@ -23,22 +23,32 @@ pipeline {
         
         stage('Push to ECR') {
             steps {
-                sh """
-                    aws ecr get-login-password --region ${AWS_REGION} | \
-                    docker login --username AWS --password-stdin ${ECR_REPO}
-                    docker push ${ECR_REPO}:${IMAGE_TAG}
-                """
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-credentials'
+                ]]) {
+                    sh """
+                        aws ecr get-login-password --region ${AWS_REGION} | \
+                        docker login --username AWS --password-stdin ${ECR_REPO}
+                        docker push ${ECR_REPO}:${IMAGE_TAG}
+                    """
+                }
             }
         }
         
         stage('Deploy to EKS') {
             steps {
-                sh """
-                    aws eks update-kubeconfig --region ${AWS_REGION} --name ${CLUSTER_NAME}
-                    kubectl set image deployment/hello-devops hello-devops=${ECR_REPO}:${IMAGE_TAG} || \
-                    kubectl create deployment hello-devops --image=${ECR_REPO}:${IMAGE_TAG}
-                    kubectl expose deployment hello-devops --type=LoadBalancer --port=5000 || true
-                """
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-credentials'
+                ]]) {
+                    sh """
+                        aws eks update-kubeconfig --region ${AWS_REGION} --name ${CLUSTER_NAME}
+                        kubectl set image deployment/hello-devops hello-devops=${ECR_REPO}:${IMAGE_TAG} || \
+                        kubectl create deployment hello-devops --image=${ECR_REPO}:${IMAGE_TAG}
+                        kubectl expose deployment hello-devops --type=LoadBalancer --port=5000 || true
+                    """
+                }
             }
         }
     }
